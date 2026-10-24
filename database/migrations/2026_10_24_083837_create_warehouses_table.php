@@ -11,8 +11,18 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('categories', function (Blueprint $table) {
+        Schema::create('warehouses', function (Blueprint $table) {
             $table->id();
+
+            $table->string('name', 150);
+            $table->string('code', 50)->unique();
+
+            $table->text('address')->nullable();
+            $table->string('phone', 30)->nullable();
+
+            $table->enum('status', ['active', 'inactive'])
+                  ->default('active');
+
             $table->timestamps();
         });
     }
@@ -22,6 +32,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('categories');
+        Schema::dropIfExists('warehouses');
     }
 };

@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Api;
+namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\Category;
@@ -80,12 +80,12 @@ class CategoryController extends Controller
         $category = Category::findOrFail($id);
 
         $validated = $request->validate([
-            'parent_id' => 'nullable|exists:categories,id',
-            'name' => 'required|string|max:255',
-            'slug' => 'required|string|max:255|unique:categories,slug,' . $category->id,
-            'description' => 'nullable|string',
-            'image' => 'nullable|string|max:255',
-            'status' => 'required|in:active,inactive',
+            'parent_id' => 'sometimes|nullable|exists:categories,id',
+            'name' => 'sometimes|required|string|max:255',
+            'slug' => 'sometimes|required|string|max:255|unique:categories,slug,' . $category->id,
+            'description' => 'sometimes|nullable|string',
+            'image' => 'sometimes|nullable|string|max:255',
+            'status' => 'sometimes|required|in:active,inactive',
         ]);
 
         $category->update($validated);

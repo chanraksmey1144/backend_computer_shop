@@ -1,0 +1,1 @@
+{"version":2,"defects":[],"times":{"Tests\\Unit\\ExampleTest::test_that_true_is_true":0.01,"Tests\\Feature\\ExampleTest::test_the_application_returns_a_successful_response":0.026,"Tests\\Feature\\CategoryApiTest::test_validation_errors_are_returned_as_json_without_an_accept_header":0.091}}

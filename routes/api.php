@@ -1,9 +1,15 @@
 <?php
 
-use App\Http\Controllers\Api\CategoryController;
+use App\Http\Controllers\API\BrandController;
+use App\Http\Controllers\API\CategoryController;
+use App\Http\Controllers\API\InventoryController;
 use App\Http\Controllers\API\OtpController;
+use App\Http\Controllers\API\ProductController;
+use App\Http\Controllers\API\ProductImageController;
+use App\Http\Controllers\API\ProductVariantController;
 use App\Http\Controllers\API\RoleController;
 use App\Http\Controllers\API\UserController;
+use App\Http\Controllers\API\WarehouseController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -31,5 +37,10 @@ Route::prefix('otp')->group(function () {
     // before using it in an actual application.
 });
 
-Route::apiResource('categories',CategoryController::class);
-
+Route::apiResource('categories', CategoryController::class);
+Route::apiResource('brands', BrandController::class);
+Route::apiResource('products', ProductController::class);
+Route::apiResource('products/{product}/images', ProductImageController::class);
+Route::apiResource('products/{product}/variants', ProductVariantController::class);
+Route::apiResource('warehouses', WarehouseController::class);
+Route::apiResource('inventories', InventoryController::class);
