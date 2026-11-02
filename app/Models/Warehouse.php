@@ -16,5 +16,8 @@ class Warehouse extends Model
         'phone',
         'status',
     ];
-    
+    public function inventoryMovements()
+    {
+        return $this->hasMany(InventoryMovement::class);
+    }
 }
