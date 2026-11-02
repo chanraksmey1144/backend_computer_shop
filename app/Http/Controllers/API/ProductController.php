@@ -16,7 +16,13 @@ class ProductController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Product::with(['category', 'brand']);
+        $query = Product::with([
+            'category',
+            'brand',
+            'images' => fn ($imageQuery) => $imageQuery
+                ->orderByDesc('is_primary')
+                ->orderBy('sort_order'),
+        ]);
 
         // Search by product name
         if ($request->filled('search')) {
@@ -60,8 +66,16 @@ class ProductController extends Controller
             );
         }
 
+        $sort = $request->input('sort', 'newest');
+        if ($sort === 'price_asc') {
+            $query->orderBy('price')->orderByDesc('id');
+        } elseif ($sort === 'price_desc') {
+            $query->orderByDesc('price')->orderByDesc('id');
+        } else {
+            $query->orderByDesc('id');
+        }
+
         $products = $query
-            ->orderByDesc('id')
             ->paginate(10)
             ->withQueryString();
 

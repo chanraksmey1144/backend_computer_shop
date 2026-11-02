@@ -129,4 +129,36 @@ class OtpService
 
         return $otp;
     }
+
+    public function consumeVerified(
+        string $destination,
+        string $purpose
+    ): int {
+        return DB::transaction(function () use ($destination, $purpose) {
+            $otp = OtpVerification::where('destination', $destination)
+                ->where('purpose', $purpose)
+                ->orderByDesc('id')
+                ->lockForUpdate()
+                ->first();
+
+            if (
+                !$otp
+                || !$otp->verified_at
+                || !$otp->user_id
+                || now()->greaterThanOrEqualTo($otp->expires_at)
+            ) {
+                throw ValidationException::withMessages([
+                    'otp' => ['Verify a valid, unexpired OTP before continuing.'],
+                ]);
+            }
+
+            $userId = $otp->user_id;
+
+            OtpVerification::where('destination', $destination)
+                ->where('purpose', $purpose)
+                ->delete();
+
+            return $userId;
+        });
+    }
 }

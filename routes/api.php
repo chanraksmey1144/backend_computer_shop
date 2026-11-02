@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Controllers\API\BrandController;
+use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\CategoryController;
+use App\Http\Controllers\API\GoogleAuthController;
 use App\Http\Controllers\API\InventoryController;
 use App\Http\Controllers\API\OtpController;
 use App\Http\Controllers\API\ProductController;
@@ -25,6 +27,23 @@ use Illuminate\Support\Facades\Route;
 
 Route::apiResource('roles', RoleController::class);
 Route::apiResource('users', UserController::class);
+
+// OAuth uses the web session to validate the state value returned by Google.
+Route::middleware('web')->prefix('auth')->group(function () {
+    Route::get('/google', [GoogleAuthController::class, 'redirect']);
+    Route::get('/google/callback', [GoogleAuthController::class, 'callback']);
+});
+
+Route::post('/register', [AuthController::class, 'register'])
+    ->middleware('throttle:6,1');
+Route::post('/login', [AuthController::class, 'login'])
+    ->middleware('throttle:6,1');
+Route::post('/password/reset', [AuthController::class, 'resetPassword'])
+    ->middleware('throttle:6,1');
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/logout', [AuthController::class, 'logout']);
+    Route::get('/user', [AuthController::class, 'user']);
+});
 
 Route::prefix('otp')->group(function () {
     Route::post('/send', [OtpController::class, 'send'])
