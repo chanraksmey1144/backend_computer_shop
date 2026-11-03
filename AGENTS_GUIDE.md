@@ -18,9 +18,11 @@ It implements:
 - **Foundation**: roles, users.
 - **Catalog**: categories, brands, products, product images, product variants.
 - **Stock**: warehouses and inventories.
+- **Cart**: authenticated users can create/read/clear a cart and add, update,
+  or remove cart items.
 
-Still only in the reference SQL (not in Laravel): carts, orders, order items,
-addresses, payments, shipments, coupons, reviews, audit logs, and admin
+Still only in the reference SQL (not in Laravel): orders, order items,
+payments, shipments, coupons, reviews, audit logs, and admin
 reporting/dashboard aggregates.
 
 It is a **standalone git repository** nested inside the project root. Check
@@ -175,12 +177,17 @@ says to add auth/admin authorization first.
 | GET/POST/GET/PUT/PATCH/DELETE | `/api/warehouses` | `WarehouseController` |
 | GET/POST/GET/PUT/PATCH/DELETE | `/api/inventories` | `InventoryController` |
 
+Authenticated cart routes are `GET/POST/DELETE /api/cart`, `POST
+/api/cart/items`, `PATCH /api/cart/items/{item}`, and `DELETE
+/api/cart/items/{item}`.
+
 Note: `/api/products/{product}/images` and `/variants` are `apiResource`
 routes, so item routes are `/images/{image}` and `/variants/{variant}`. The
 controller methods scope each record to the parent product.
 
 Frontend services expect `/user` (PUT), `/user/password`, `/user/addresses`,
-`/cart*`, `/orders*`, and `/admin/*`; those do not exist.
+`/orders*` and `/admin/*`; those do not exist. Cart routes are implemented
+under Sanctum authentication.
 
 ---
 
@@ -462,7 +469,7 @@ Fix only when the task calls for it, but never copy these patterns:
     as-is.
 12. **`DatabaseSeeder` is empty.** Roles are created on demand (`customer` by
     register/Google), but a fresh DB has no admin/seed data.
-13. **Orders/cart/address/payment/reporting tables are not migrated.** They
+13. **Order/payment/reporting tables are not migrated.** They
     exist only in `../Database/`.
 14. **`OtpVerification` has no `updated_at`**; keep `$timestamps = false` or
     inserts will fail. Same idea for `Inventory` (only `updated_at`).
@@ -574,7 +581,7 @@ Frontend dev server (separate app): `http://localhost:5173`.
 
 1. Add real authorization: protect user/role/catalog/inventory mutations and
    admin endpoints with Sanctum + role checks/policies.
-2. Implement cart, orders, order items, addresses, payments, and admin
+2. Implement orders, order items, payments, and admin
    reporting/dashboard aggregates from `../Database/codesql.sql`.
 3. Add a product stock aggregate (sum of inventories) or an inventory summary
    so storefront availability checks are accurate.

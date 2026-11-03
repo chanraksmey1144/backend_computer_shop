@@ -3,7 +3,9 @@
 use App\Http\Controllers\API\AddressController;
 use App\Http\Controllers\API\BrandController;
 use App\Http\Controllers\API\AuthController;
+use App\Http\Controllers\API\CartController;
 use App\Http\Controllers\API\CategoryController;
+use App\Http\Controllers\API\CouponController;
 use App\Http\Controllers\API\GoogleAuthController;
 use App\Http\Controllers\API\InventoryController;
 use App\Http\Controllers\API\InventoryMovementController;
@@ -75,4 +77,28 @@ Route::patch('addresses/{address}/default', [AddressController::class, 'setDefau
 Route::prefix('user')->group(function () {
     Route::apiResource('addresses', AddressController::class);
     Route::patch('addresses/{address}/default', [AddressController::class, 'setDefault']);
+});
+Route::middleware('auth:sanctum')->group(function () {
+
+    Route::get('/cart', [CartController::class, 'index']);
+
+    Route::post('/cart', [CartController::class, 'store']);
+    Route::post('/cart/items', [CartController::class, 'addItem']);
+    Route::patch('/cart/items/{item}', [CartController::class, 'updateItem']);
+    Route::delete('/cart/items/{item}', [CartController::class, 'removeItem']);
+
+    Route::delete('/cart', [CartController::class, 'destroy']);
+
+});
+Route::middleware('auth:sanctum')->group(function () {
+
+    // Coupon CRUD
+    Route::apiResource('coupons', CouponController::class);
+
+    // Validate Coupon
+    Route::post('/coupons/validate', [
+        CouponController::class,
+        'validateCoupon'
+    ]);
+
 });
