@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\API\AddressController;
 use App\Http\Controllers\API\BrandController;
 use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\CategoryController;
@@ -9,6 +10,7 @@ use App\Http\Controllers\API\InventoryMovementController;
 use App\Http\Controllers\API\OtpController;
 use App\Http\Controllers\API\ProductController;
 use App\Http\Controllers\API\ProductImageController;
+use App\Http\Controllers\API\ProductSerialNumberController;
 use App\Http\Controllers\API\ProductVariantController;
 use App\Http\Controllers\API\RoleController;
 use App\Http\Controllers\API\UserController;
@@ -65,3 +67,12 @@ Route::apiResource('products/{product}/variants', ProductVariantController::clas
 Route::apiResource('warehouses', WarehouseController::class);
 Route::apiResource('inventories', InventoryController::class);
 Route::apiResource('inventory-movements', InventoryMovementController::class);
+Route::apiResource('product-serial-numbers', ProductSerialNumberController::class);
+
+Route::apiResource('addresses', AddressController::class);
+Route::patch('addresses/{address}/default', [AddressController::class, 'setDefault']);
+
+Route::prefix('user')->group(function () {
+    Route::apiResource('addresses', AddressController::class);
+    Route::patch('addresses/{address}/default', [AddressController::class, 'setDefault']);
+});

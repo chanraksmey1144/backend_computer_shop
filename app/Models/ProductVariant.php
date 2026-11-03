@@ -9,7 +9,7 @@ class ProductVariant extends Model
 {
     use HasFactory;
 
-        protected $fillable = [
+    protected $fillable = [
         'product_id',
         'sku',
         'name',
@@ -29,5 +29,12 @@ class ProductVariant extends Model
     public function product()
     {
         return $this->belongsTo(Product::class);
-    }   
+    }
+    public function serialNumbers()
+    {
+        return $this->hasMany(
+            ProductSerialNumber::class,
+            'variant_id'
+        );
+    }
 }

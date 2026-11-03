@@ -75,4 +75,8 @@ class Product extends Model
     {
         return $this->hasMany(InventoryMovement::class);
     }
+    public function serialNumbers()
+    {
+        return $this->hasMany(ProductSerialNumber::class);
+    }
 }
