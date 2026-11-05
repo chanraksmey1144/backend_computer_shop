@@ -12,6 +12,7 @@ use App\Http\Controllers\API\InventoryMovementController;
 use App\Http\Controllers\API\OrderController;
 use App\Http\Controllers\API\OrderItemController;
 use App\Http\Controllers\API\OtpController;
+use App\Http\Controllers\API\PaymentController;
 use App\Http\Controllers\API\ProductController;
 use App\Http\Controllers\API\ProductImageController;
 use App\Http\Controllers\API\ProductSerialNumberController;
@@ -119,5 +120,21 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/order-items', [OrderItemController::class, 'index']);
 
     Route::get('/order-items/{id}', [OrderItemController::class, 'show']);
+
+});
+
+Route::middleware('auth:sanctum')->group(function () {
+
+    // Payment APIs
+    Route::get('/payments', [PaymentController::class, 'index']);
+
+    Route::post('/payments', [PaymentController::class, 'store']);
+
+    Route::get('/payments/{id}', [PaymentController::class, 'show']);
+
+    Route::get('/orders/{orderId}/payments', [
+        PaymentController::class,
+        'orderPayments'
+    ]);
 
 });
