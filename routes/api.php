@@ -9,6 +9,8 @@ use App\Http\Controllers\API\CouponController;
 use App\Http\Controllers\API\GoogleAuthController;
 use App\Http\Controllers\API\InventoryController;
 use App\Http\Controllers\API\InventoryMovementController;
+use App\Http\Controllers\API\OrderController;
+use App\Http\Controllers\API\OrderItemController;
 use App\Http\Controllers\API\OtpController;
 use App\Http\Controllers\API\ProductController;
 use App\Http\Controllers\API\ProductImageController;
@@ -100,5 +102,22 @@ Route::middleware('auth:sanctum')->group(function () {
         CouponController::class,
         'validateCoupon'
     ]);
+
+});
+Route::middleware('auth:sanctum')->group(function () {
+
+    // Orders
+    Route::get('/orders', [OrderController::class, 'index']);
+
+    Route::post('/orders', [OrderController::class, 'store']);
+
+    Route::get('/orders/{id}', [OrderController::class, 'show']);
+
+    Route::patch('/orders/{id}/cancel', [OrderController::class, 'cancel']);
+
+    // Order Items
+    Route::get('/order-items', [OrderItemController::class, 'index']);
+
+    Route::get('/order-items/{id}', [OrderItemController::class, 'show']);
 
 });
