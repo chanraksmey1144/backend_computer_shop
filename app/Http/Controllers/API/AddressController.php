@@ -6,40 +6,18 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 class AddressController extends Controller
 {
     private function resolveUser(Request $request): User
     {
-        if ($request->user()) {
-            return $request->user();
-        }
-
-        if ($request->filled('user_id')) {
-            $user = User::query()->find($request->input('user_id'));
-
-            if ($user) {
-                return $user;
-            }
-
-            throw ValidationException::withMessages([
-                'user_id' => ['The selected user does not exist.'],
-            ]);
-        }
-
-        $user = User::query()->oldest('id')->first();
-
-        if (!$user) {
-            throw ValidationException::withMessages([
-                'user_id' => ['No user exists. Create a user before adding an address.'],
-            ]);
-        }
+        $user = $request->user();
+        abort_unless($user instanceof User, 401);
 
         return $user;
     }
 
-   /**
+    /**
      * GET /api/addresses
      * Get addresses of logged-in user.
      */
@@ -65,12 +43,6 @@ class AddressController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'user_id' => [
-                'sometimes',
-                'integer',
-                'exists:users,id',
-            ],
-
             'recipient_name' => [
                 'required',
                 'string',
@@ -126,7 +98,6 @@ class AddressController extends Controller
         ]);
 
         $user = $this->resolveUser($request);
-        unset($validated['user_id']);
 
         $isDefault = $validated['is_default'] ?? false;
 
@@ -140,7 +111,7 @@ class AddressController extends Controller
 
             // First address becomes default automatically.
             $makeDefault = $isDefault ||
-                !$user->addresses()->exists();
+                ! $user->addresses()->exists();
 
             if ($makeDefault) {
                 $user->addresses()->update([

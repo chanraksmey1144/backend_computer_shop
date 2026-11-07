@@ -3,6 +3,7 @@
 namespace App\Service\Payments;
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use RuntimeException;
 
 class AbaPayWayService
@@ -47,10 +48,10 @@ class AbaPayWayService
             'amount' => $amount,
             'items' => $items,
             'shipping' => $shipping,
-            'firstname' => $data['firstname'],
-            'lastname' => $data['lastname'],
-            'email' => $data['email'] ?? '',
-            'phone' => $data['phone'] ?? '',
+            'firstname' => Str::substr((string) $data['firstname'], 0, 100),
+            'lastname' => Str::substr((string) $data['lastname'], 0, 100),
+            'email' => strlen((string) ($data['email'] ?? '')) <= 50 ? ($data['email'] ?? '') : '',
+            'phone' => Str::substr((string) ($data['phone'] ?? ''), 0, 20),
             'type' => 'purchase',
             'payment_option' => '',
             'return_url' => $data['return_url'],

@@ -36,7 +36,7 @@ It is a **standalone git repository** nested inside the project root. Check
 |------|-------|
 | PHP | `^8.1` |
 | Laravel | `^10.0` |
-| Sanctum | `^3.3` (Bearer tokens; guards `/user`, `/logout`, carts, coupons) |
+| Sanctum | `^3.3` (Bearer tokens; guards `/user`, `/logout`, addresses, carts, coupons, orders, and payments) |
 | Socialite | `^5.31` (Google OAuth) |
 | Database | MySQL 8, `utf8mb4`, `utf8mb4_unicode_ci`, strict mode |
 | Local DB | `sale_computer` at `127.0.0.1:3307`, user `root`, empty password |
@@ -139,22 +139,21 @@ task justifies introducing these layers.
 - Sanctum's `EnsureFrontendRequestsAreStateful` is commented out. Tokens are
   Bearer tokens, not SPA cookie auth.
 - **Authenticated (`auth:sanctum`)**: `/api/logout`, `/api/user`, all
-  `/api/cart*` routes, and all `/api/coupons*` routes (including
-  `/api/coupons/validate`).
+  `/api/cart*`, `/api/coupons*` (including `/api/coupons/validate`), and both
+  address route prefixes.
 - **Unauthenticated**: roles, users, categories, brands, products, images,
-  variants, warehouses, inventories, inventory movements, product serial
-  numbers, and **addresses**.
+  variants, warehouses, inventories, inventory movements, and product serial
+  numbers.
 - `routes/api.php` applies `throttle:6,1` to register/login/password reset.
 - OTP routes use the custom `throttle:otp-send` / `throttle:otp-verify`
   limiters.
 - Google OAuth routes (`/api/auth/google*`) are wrapped in the **`web`**
   middleware group so the OAuth `state` value can use the session.
-- **Addresses are public and are not scoped to the authenticated caller.**
-  `AddressController::resolveUser` prefers the authenticated user, then a
-  `user_id` request field, then the oldest user in the DB. Do not add more
-  consumers that rely on this fallback.
-- `/api/addresses` and `/api/user/addresses` both point at the same
-  `AddressController` and both expose the same route names (`addresses.*`).
+- **Addresses require Sanctum and are scoped to the authenticated caller.**
+  `AddressController::resolveUser` has no request-field or oldest-user
+  fallback; never accept a client-supplied `user_id` for address ownership.
+- `/api/addresses` and `/api/user/addresses` are authenticated aliases for the
+  same controller with distinct route names.
 
 ---
 
@@ -210,7 +209,7 @@ requests fail with a controller method error. Add the methods or stop using
 item routes are `/images/{image}` and `/variants/{variant}`. The controller
 methods scope each record to the parent product.
 
-### Addresses (unauthenticated)
+### Addresses (authenticated)
 
 | Method | Path | Action |
 |--------|------|--------|
@@ -219,8 +218,8 @@ methods scope each record to the parent product.
 | GET/POST/GET/PUT/PATCH/DELETE | `/api/user/addresses` | same controller |
 | PATCH | `/api/user/addresses/{address}/default` | same controller |
 
-Both prefixes are public and register the same route names; the later
-`/user/addresses` registration wins for `route('addresses.*')`.
+Both prefixes require a Sanctum bearer token and only return or mutate addresses
+belonging to that token's user. The prefixes have distinct route names.
 
 ### Cart (authenticated)
 
@@ -246,7 +245,7 @@ but is **not routed**. Treat it as dead code unless a task asks to consolidate.
 Any authenticated user can manage coupons; there is no admin authorization.
 
 Frontend services still expect `/user` (PUT), `/user/password`, and `/admin/*`;
-those do not exist. Addresses now exist, but only under the public routes above.
+those do not exist. Both address route prefixes require Sanctum authentication.
 
 ### Orders and payments (authenticated)
 
@@ -255,6 +254,12 @@ those do not exist. Addresses now exist, but only under the public routes above.
 | GET/POST | `/api/orders` | `OrderController@index/store` |
 | GET | `/api/orders/{id}` | `OrderController@show` |
 | PATCH | `/api/orders/{id}/cancel` | `OrderController@cancel` |
+
+Order creation accepts an optional `delivery_latitude` and
+`delivery_longitude` pair. Both values are range-validated and stored on the
+order; the browser must collect them only after the customer requests location
+sharing.
+
 | GET | `/api/order-items`, `/api/order-items/{id}` | `OrderItemController` |
 | GET/POST | `/api/payments` | `PaymentController@index/store` |
 | GET | `/api/payments/{id}` | `PaymentController@show` |
@@ -266,8 +271,9 @@ those do not exist. Addresses now exist, but only under the public routes above.
 unsigned callbacks. The browser checkout URL is a short-lived signed web route;
 the HTML is cached server-side and served with a sandboxed Content Security
 Policy. Keep `ABA_PAYWAY_API_KEY` server-side. Configure `ABA_PAYWAY_MODE`,
-`ABA_PAYWAY_MERCHANT_ID`, `ABA_PAYWAY_API_KEY`, `APP_URL`, `FRONTEND_URL`, and a
-public, ABA-whitelisted `ABA_PAYWAY_CALLBACK_URL` in production. Sandbox is the
+`ABA_PAYWAY_MERCHANT_ID`, `ABA_PAYWAY_API_KEY`, `APP_URL`, and `FRONTEND_URL`.
+Set `ABA_PAYWAY_CALLBACK_URL` to a public, ABA-whitelisted endpoint, or leave it
+empty when the merchant profile has a default callback URL. Sandbox is the
 default; production mode selects `https://checkout.payway.com.kh` unless an
 explicit `ABA_PAYWAY_BASE_URL` override is set.
 
@@ -350,7 +356,7 @@ Conventions per controller:
 | `Cart` | `carts` | `user_id` | `user()`, `items()` |
 | `CartItem` | `cart_items` | `cart_id`, `product_id`, `variant_id`, `quantity` | `cart()`, `product()`, `variant()` |
 | `Coupon` | `coupons` | `code`, `description`, `discount_type`, `discount_value`, `minimum_order_amount`, `maximum_discount_amount`, `usage_limit`, `usage_count`, `starts_at`, `expires_at`, `status` | none |
-| `Order` | `orders` | `order_number`, `user_id`, `address_id`, `coupon_id`, statuses, currency, totals, recipient/shipping snapshot, notes, timestamps | `user()`, `address()`, `coupon()`, `items()`, `payments()` |
+| `Order` | `orders` | `order_number`, `user_id`, `address_id`, `coupon_id`, statuses, currency, totals, recipient/shipping snapshot, delivery coordinates, notes, timestamps | `user()`, `address()`, `coupon()`, `items()`, `payments()` |
 | `OrderItem` | `order_items` | `order_id`, `product_id`, `variant_id`, product snapshot, quantity, prices, discount | `order()`, `product()`, `variant()`, `serialNumbers()` |
 | `Payment` | `payments` | `order_id`, `provider`, `provider_transaction_id`, `payment_method`, amount, currency, status, provider response, `paid_at` | `order()` |
 
@@ -406,6 +412,7 @@ Migrations applied (Laravel defaults + project):
 - `2026_11_05_072655_create_order_items_table`
 - `2026_11_05_073044_add_order_item_foreign_key_to_product_serial_numbers_table`
 - `2026_11_05_080044_create_payments_table`
+- `2026_11_07_120000_add_delivery_coordinates_to_orders_table`
 
 Constraints worth knowing:
 
@@ -545,8 +552,8 @@ Constraints worth knowing:
 
 ### 7.6 Addresses
 
-- Public CRUD. `resolveUser` order: authenticated user → `user_id` input →
-  oldest user. This means a caller can read/write another user's addresses.
+- CRUD requires `auth:sanctum`. `resolveUser` returns only the authenticated
+  user; `user_id` request input is not accepted for ownership.
 - `index` paginates 10, default addresses first, then newest.
 - `store` requires `recipient_name`, `phone`, `province`, `address_line`;
   optional district/commune/village/`delivery_note`/`is_default`. The first
@@ -677,15 +684,13 @@ Google credentials — keep it that way.
 Fix only when the task calls for it, but never copy these patterns:
 
 1. **No authorization on most CRUD.** Roles, users, catalog, inventory,
-   inventory movements, serial numbers, and addresses are public, and there is
-   no admin middleware/policy. Carts/coupons require login but coupons have no
-   admin check.
+   inventory movements, and serial numbers are public, and there is no admin
+   middleware/policy. Carts, coupons, and addresses require login, but coupons
+   have no admin check.
 2. **User CRUD is especially dangerous** when public: anyone can list users or
    create/delete accounts until auth + authorization is applied.
-3. **Addresses are public and cross-user.** `resolveUser` falls back to a
-   supplied `user_id` or the oldest user, so addresses are readable/writable by
-   anyone. Both `/api/addresses` and `/api/user/addresses` are exposed, and they
-   register duplicate `addresses.*` route names.
+3. **Addresses are scoped to the Sanctum user.** Both route prefixes require a
+   bearer token and the controller ignores client-supplied owner IDs.
 4. **`User::$fillable` includes `branch_id`, but no migration adds that
    column.** Passing it to `User::create`/`update` will fail at the DB level.
 5. **Product responses omit stock.** `product.stock` is used by the frontend but

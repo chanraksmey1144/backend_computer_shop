@@ -148,7 +148,7 @@ class AbaPayWayController extends Controller
         $frontendUrl = rtrim((string) config('app.frontend_url'), '/');
         $successUrl = $frontendUrl.'/payment/result?payment_id='.$payment->id;
         $cancelUrl = $frontendUrl.'/payment/result?payment_id='.$payment->id.'&result=cancelled';
-        $callbackUrl = config('services.aba_payway.callback_url') ?: route('payway.callback');
+        $callbackUrl = (string) config('services.aba_payway.callback_url', '');
 
         try {
             $result = $this->abaPayWay->createPayment([
@@ -371,6 +371,21 @@ class AbaPayWayController extends Controller
                 ->header('Cache-Control', 'no-store');
         }
 
+        $providerOrigin = $this->payWayProviderOrigin();
+        $baseTag = '<base href="'.htmlspecialchars($providerOrigin.'/', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').'">';
+        $html = preg_replace('/<base\b[^>]*>/i', '', $html) ?? $html;
+
+        if (preg_match('/<head\b[^>]*>/i', $html)) {
+            $html = preg_replace_callback(
+                '/<head\b[^>]*>/i',
+                static fn (array $matches): string => $matches[0].$baseTag,
+                $html,
+                1
+            ) ?? $html;
+        } else {
+            $html = $baseTag.$html;
+        }
+
         return response($html)
             ->header('Content-Type', 'text/html; charset=UTF-8')
             ->header('Cache-Control', 'no-store, private')
@@ -382,8 +397,25 @@ class AbaPayWayController extends Controller
                 "default-src 'none'; script-src 'unsafe-inline' https:; ".
                 "style-src 'unsafe-inline' https:; img-src https: data:; ".
                 'connect-src https: wss:; font-src https: data:; '.
-                "frame-src https:; form-action https:; base-uri 'none'"
+                "frame-src https:; form-action https:; base-uri {$providerOrigin}"
             );
+    }
+
+    private function payWayProviderOrigin(): string
+    {
+        $parts = parse_url((string) config('services.aba_payway.base_url'));
+
+        if (! is_array($parts) || ($parts['scheme'] ?? null) !== 'https' || empty($parts['host'])) {
+            abort(500, 'ABA PayWay must use an HTTPS provider URL.');
+        }
+
+        $origin = 'https://'.$parts['host'];
+
+        if (isset($parts['port'])) {
+            $origin .= ':'.$parts['port'];
+        }
+
+        return $origin;
     }
 
     private function applyPaymentResult(Payment $payment, string $status, array $providerData): void

@@ -75,12 +75,14 @@ Route::apiResource('inventories', InventoryController::class);
 Route::apiResource('inventory-movements', InventoryMovementController::class);
 Route::apiResource('product-serial-numbers', ProductSerialNumberController::class);
 
-Route::apiResource('addresses', AddressController::class);
-Route::patch('addresses/{address}/default', [AddressController::class, 'setDefault']);
-
-Route::prefix('user')->group(function () {
+Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('addresses', AddressController::class);
     Route::patch('addresses/{address}/default', [AddressController::class, 'setDefault']);
+
+    Route::prefix('user')->name('user.')->group(function () {
+        Route::apiResource('addresses', AddressController::class);
+        Route::patch('addresses/{address}/default', [AddressController::class, 'setDefault']);
+    });
 });
 Route::middleware('auth:sanctum')->group(function () {
 

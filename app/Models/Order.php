@@ -26,6 +26,8 @@ class Order extends Model
         'recipient_name',
         'recipient_phone',
         'shipping_address',
+        'delivery_latitude',
+        'delivery_longitude',
         'customer_note',
         'placed_at',
         'cancelled_at',
@@ -37,6 +39,8 @@ class Order extends Model
         'delivery_fee' => 'decimal:2',
         'tax_amount' => 'decimal:2',
         'total_amount' => 'decimal:2',
+        'delivery_latitude' => 'decimal:7',
+        'delivery_longitude' => 'decimal:7',
         'placed_at' => 'datetime',
         'cancelled_at' => 'datetime',
     ];
@@ -65,6 +69,7 @@ class Order extends Model
     {
         return $this->items();
     }
+
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class);

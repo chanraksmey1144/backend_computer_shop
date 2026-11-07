@@ -64,6 +64,20 @@ class OrderController extends Controller
                 'string'
             ],
 
+            'delivery_latitude' => [
+                'nullable',
+                'numeric',
+                'between:-90,90',
+                'required_with:delivery_longitude',
+            ],
+
+            'delivery_longitude' => [
+                'nullable',
+                'numeric',
+                'between:-180,180',
+                'required_with:delivery_latitude',
+            ],
+
             'coupon_code' => [
                 'nullable',
                 'string',
@@ -248,6 +262,10 @@ class OrderController extends Controller
             $recipientPhone = $validated['recipient_phone'] ?? null;
 
             $shippingAddress = $validated['shipping_address'] ?? null;
+
+            $deliveryLatitude = $validated['delivery_latitude'] ?? null;
+
+            $deliveryLongitude = $validated['delivery_longitude'] ?? null;
 
             if (!empty($validated['address_id'])) {
 
@@ -466,6 +484,10 @@ class OrderController extends Controller
                 'recipient_phone' => $recipientPhone,
 
                 'shipping_address' => $shippingAddress,
+
+                'delivery_latitude' => $deliveryLatitude,
+
+                'delivery_longitude' => $deliveryLongitude,
 
                 'customer_note' => $validated['customer_note'] ?? null,
 
