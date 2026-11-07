@@ -1,5 +1,7 @@
 <?php
 
+$abaPayWayMode = env('ABA_PAYWAY_MODE', 'sandbox');
+
 return [
 
     /*
@@ -36,8 +38,28 @@ return [
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),
         'redirect' => env(
             'GOOGLE_REDIRECT_URI',
-            env('APP_URL', 'http://127.0.0.1:8000') . '/api/auth/google/callback'
+            env('APP_URL', 'http://127.0.0.1:8000').'/api/auth/google/callback'
         ),
+    ],
+
+    'aba_payway' => [
+        'mode' => $abaPayWayMode,
+        'merchant_id' => env('ABA_PAYWAY_MERCHANT_ID'),
+        'api_key' => env('ABA_PAYWAY_API_KEY'),
+        'base_url' => env(
+            'ABA_PAYWAY_BASE_URL',
+            $abaPayWayMode === 'production'
+                ? 'https://checkout.payway.com.kh'
+                : 'https://checkout-sandbox.payway.com.kh'
+        ),
+        'callback_url' => env('ABA_PAYWAY_CALLBACK_URL'),
+    ],
+
+    'bakong' => [
+        'mode' => env('BAKONG_MODE', 'sandbox'),
+        'token' => env('BAKONG_TOKEN'),
+        'base_url' => env('BAKONG_BASE_URL'),
+        'account_id' => env('BAKONG_ACCOUNT_ID'),
     ],
 
 ];

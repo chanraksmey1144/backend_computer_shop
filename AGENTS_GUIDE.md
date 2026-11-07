@@ -21,9 +21,9 @@ It implements:
 - **Commerce**: authenticated carts (one per user) and coupons (CRUD + a
   validation/quote endpoint).
 
-Still only in the reference SQL (not in Laravel): orders, order items,
-payments, shipments, reviews, audit logs, and admin reporting/dashboard
-aggregates.
+Implemented in Laravel migrations: orders, order items, and payments. Still
+only in the reference SQL: shipments, reviews, audit logs, and admin
+reporting/dashboard aggregates.
 
 It is a **standalone git repository** nested inside the project root. Check
 `git status` before editing; never commit unless explicitly asked.
@@ -245,9 +245,31 @@ but is **not routed**. Treat it as dead code unless a task asks to consolidate.
 
 Any authenticated user can manage coupons; there is no admin authorization.
 
-Frontend services still expect `/user` (PUT), `/user/password`, `/orders*` and
-`/admin/*`; those do not exist. Addresses now exist, but only under the public
-routes above.
+Frontend services still expect `/user` (PUT), `/user/password`, and `/admin/*`;
+those do not exist. Addresses now exist, but only under the public routes above.
+
+### Orders and payments (authenticated)
+
+| Method | Path | Action |
+|--------|------|--------|
+| GET/POST | `/api/orders` | `OrderController@index/store` |
+| GET | `/api/orders/{id}` | `OrderController@show` |
+| PATCH | `/api/orders/{id}/cancel` | `OrderController@cancel` |
+| GET | `/api/order-items`, `/api/order-items/{id}` | `OrderItemController` |
+| GET/POST | `/api/payments` | `PaymentController@index/store` |
+| GET | `/api/payments/{id}` | `PaymentController@show` |
+| GET | `/api/orders/{orderId}/payments` | `PaymentController@orderPayments` |
+| POST | `/api/orders/{orderId}/payments/aba` | Create an ABA PayWay hosted checkout |
+| GET | `/api/payments/aba/{paymentId}/status` | Verify provider status and reconcile the order |
+
+`POST /api/payments/aba/callback` is public for ABA PayWay pushback and rejects
+unsigned callbacks. The browser checkout URL is a short-lived signed web route;
+the HTML is cached server-side and served with a sandboxed Content Security
+Policy. Keep `ABA_PAYWAY_API_KEY` server-side. Configure `ABA_PAYWAY_MODE`,
+`ABA_PAYWAY_MERCHANT_ID`, `ABA_PAYWAY_API_KEY`, `APP_URL`, `FRONTEND_URL`, and a
+public, ABA-whitelisted `ABA_PAYWAY_CALLBACK_URL` in production. Sandbox is the
+default; production mode selects `https://checkout.payway.com.kh` unless an
+explicit `ABA_PAYWAY_BASE_URL` override is set.
 
 ---
 
@@ -328,6 +350,9 @@ Conventions per controller:
 | `Cart` | `carts` | `user_id` | `user()`, `items()` |
 | `CartItem` | `cart_items` | `cart_id`, `product_id`, `variant_id`, `quantity` | `cart()`, `product()`, `variant()` |
 | `Coupon` | `coupons` | `code`, `description`, `discount_type`, `discount_value`, `minimum_order_amount`, `maximum_discount_amount`, `usage_limit`, `usage_count`, `starts_at`, `expires_at`, `status` | none |
+| `Order` | `orders` | `order_number`, `user_id`, `address_id`, `coupon_id`, statuses, currency, totals, recipient/shipping snapshot, notes, timestamps | `user()`, `address()`, `coupon()`, `items()`, `payments()` |
+| `OrderItem` | `order_items` | `order_id`, `product_id`, `variant_id`, product snapshot, quantity, prices, discount | `order()`, `product()`, `variant()`, `serialNumbers()` |
+| `Payment` | `payments` | `order_id`, `provider`, `provider_transaction_id`, `payment_method`, amount, currency, status, provider response, `paid_at` | `order()` |
 
 Notes:
 
@@ -346,8 +371,8 @@ Notes:
   hides `code_hash`, casts `attempts` to int and dates to datetime.
 - `InventoryMovement` sets `$timestamps = false`; `created_at` is inserted by
   the DB default. Order by `created_at` explicitly.
-- `ProductSerialNumber` casts the FK ids to int. `order_item_id` is a plain
-  unsigned bigint with **no FK** (the `order_items` table does not exist yet).
+- `ProductSerialNumber` casts its FK ids to int. `order_item_id` references
+  `order_items` after the 2026-11-05 migration.
 - `Cart`/`CartItem`/`Address`/`Coupon` use default timestamps and int/decimal
   casts.
 - `Category::$casts` sets `status` to string (currently redundant).
@@ -377,6 +402,10 @@ Migrations applied (Laravel defaults + project):
 - `2026_11_03_092420_create_carts_table`
 - `2026_11_03_100000_create_cart_items_table`
 - `2026_11_03_155720_create_coupons_table`
+- `2026_11_05_070951_create_orders_table`
+- `2026_11_05_072655_create_order_items_table`
+- `2026_11_05_073044_add_order_item_foreign_key_to_product_serial_numbers_table`
+- `2026_11_05_080044_create_payments_table`
 
 Constraints worth knowing:
 
@@ -693,9 +722,9 @@ Fix only when the task calls for it, but never copy these patterns:
     as-is.
 19. **`DatabaseSeeder` is empty.** Roles are created on demand (`customer` by
     register/Google), but a fresh DB has no admin/seed data.
-20. **Order/payment/reporting tables are not migrated.** They exist only in
-    `../Database/`, despite the newer cart/coupon/address/serial tables being
-    migrated.
+20. **Order, order-item, and payment tables are migrated.** Apply pending
+    migrations before using checkout. Shipment, review, audit, and reporting
+    schemas remain only in `../Database/`.
 21. **`OtpVerification` has no `updated_at`**; keep `$timestamps = false` or
     inserts will fail. Same idea for `Inventory` (only `updated_at`) and
     `InventoryMovement` (only `created_at`).
@@ -706,8 +735,8 @@ Fix only when the task calls for it, but never copy these patterns:
     MySQL fulltext index.
 24. **Two migrations touch `google_id`.** Both guard with `Schema::hasColumn`,
     so order is safe, but avoid adding a third.
-25. **Frontend contract lag.** The frontend still expects `/orders*`, `/admin/*`,
-    profile update, and password change routes that the backend does not expose.
+25. **Frontend contract lag.** Admin order/reporting, profile update, and
+    password change routes are not exposed by this API.
 
 ---
 
@@ -815,9 +844,9 @@ Frontend dev server (separate app): `http://localhost:5173`.
 2. Lock down addresses: require auth, scope to the current user, remove the
    `user_id`/oldest-user fallback, and resolve the duplicate
    `/api/addresses` vs `/api/user/addresses` routes.
-3. Implement orders, order items, payments, shipments, and admin
-   reporting/dashboard aggregates from `../Database/codesql.sql`; give
-   `product_serial_numbers.order_item_id` a real FK then.
+3. Implement shipments and admin reporting/dashboard aggregates from
+   `../Database/codesql.sql`; review the serial-number order-item FK against the
+   migrated order-item schema.
 4. Wire coupons into the cart/checkout: apply discounts to cart totals, increment
    `usage_count` on redemption, and track per-user usage.
 5. Add a product stock aggregate (sum of inventories) or an inventory summary

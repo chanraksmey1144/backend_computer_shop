@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\API\AbaPayWayController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -16,3 +17,7 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', function () {
     return view('welcome');
 });
+
+Route::get('/payments/aba/{payment}/checkout', [AbaPayWayController::class, 'checkoutPage'])
+    ->middleware('signed')
+    ->name('payway.checkout');

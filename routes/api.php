@@ -1,8 +1,9 @@
 <?php
 
+use App\Http\Controllers\API\AbaPayWayController;
 use App\Http\Controllers\API\AddressController;
-use App\Http\Controllers\API\BrandController;
 use App\Http\Controllers\API\AuthController;
+use App\Http\Controllers\API\BrandController;
 use App\Http\Controllers\API\CartController;
 use App\Http\Controllers\API\CategoryController;
 use App\Http\Controllers\API\CouponController;
@@ -101,7 +102,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Validate Coupon
     Route::post('/coupons/validate', [
         CouponController::class,
-        'validateCoupon'
+        'validateCoupon',
     ]);
 
 });
@@ -134,7 +135,17 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/orders/{orderId}/payments', [
         PaymentController::class,
-        'orderPayments'
+        'orderPayments',
     ]);
 
+});
+Route::post('/payments/aba/callback', [AbaPayWayController::class, 'callback'])
+    ->name('payway.callback');
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/orders/{orderId}/payments/aba', [AbaPayWayController::class, 'createPayment'])
+        ->whereNumber('orderId');
+
+    Route::get('/payments/aba/{paymentId}/status', [AbaPayWayController::class, 'checkPayment'])
+        ->whereNumber('paymentId');
 });

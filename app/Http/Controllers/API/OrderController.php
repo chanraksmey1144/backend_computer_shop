@@ -542,6 +542,8 @@ class OrderController extends Controller
                 ]);
             }
 
+            $cart->items()->delete();
+
             /*
             |--------------------------------------------------------------------------
             | K. RETURN ORDER WITH ITEMS
@@ -635,6 +637,14 @@ class OrderController extends Controller
                 throw ValidationException::withMessages([
                     'order' => [
                         'This order cannot be cancelled.'
+                    ]
+                ]);
+            }
+
+            if ($order->payment_status === 'pending') {
+                throw ValidationException::withMessages([
+                    'payment_status' => [
+                        'This order has an active payment. Check its payment result before cancelling.'
                     ]
                 ]);
             }

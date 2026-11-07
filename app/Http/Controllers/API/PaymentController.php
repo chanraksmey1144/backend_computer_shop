@@ -71,6 +71,13 @@ class PaymentController extends Controller
 
         ]);
 
+        if ($validated['provider'] === 'aba_payway') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Use the ABA PayWay checkout endpoint to create this payment.',
+            ], 409);
+        }
+
         $user = $request->user();
 
         $payment = DB::transaction(function () use ($validated, $user) {
