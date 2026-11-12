@@ -63,5 +63,14 @@ class RouteServiceProvider extends ServiceProvider
                 Limit::perHour(10)->by('otp-verify:destination:'.$destination),
             ];
         });
+
+        RateLimiter::for('aba-payments', function (Request $request) {
+            return Limit::perMinute(60)
+                ->by('aba-payments:'.($request->user()?->id ?: $request->ip()));
+        });
+
+        RateLimiter::for('aba-callback', function (Request $request) {
+            return Limit::perMinute(120)->by('aba-callback:'.$request->ip());
+        });
     }
 }

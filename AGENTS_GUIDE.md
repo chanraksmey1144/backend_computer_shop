@@ -347,7 +347,7 @@ Conventions per controller:
 | `Brand` | `brands` | `name`, `slug`, `logo_url`, `description`, `status` | none |
 | `OtpVerification` | `otp_verifications` | `user_id`, `destination`, `purpose`, `code_hash`, `expires_at`, `verified_at`, `attempts` | `user()` belongsTo |
 | `Product` | `products` | `category_id`, `brand_id`, `name`, `slug`, `sku`, `short_description`, `description`, `product_type`, `price`, `compare_at_price`, `cost_price`, `currency`, `warranty_months`, `specifications`, `track_inventory`, `allow_backorder`, `status` | `category()`, `brand()`, `images()`, `variants()`, `inventoryMovements()`, `serialNumbers()` |
-| `ProductImage` | `product_images` | `product_id`, `image_url`, `cloudinary_public_id`, `alt_text`, `is_primary`, `sort_order` | `product()` |
+| `ProductImage` | `product_images` | `product_id`, `image_url`, `storage_path`, `cloudinary_public_id`, `alt_text`, `is_primary`, `sort_order` | `product()` |
 | `ProductVariant` | `product_variants` | `product_id`, `sku`, `name`, `attributes`, `price`, `cost_price`, `status` | `product()`, `serialNumbers()` |
 | `Warehouse` | `warehouses` | `name`, `code`, `address`, `phone`, `status` | none defined |
 | `Inventory` | `inventories` | `warehouse_id`, `product_id`, `variant_id`, `quantity`, `reserved_quantity`, `reorder_level` | `warehouse()`, `product()`, `variant()` |
@@ -482,11 +482,14 @@ Constraints worth knowing:
 
 ### 7.2 Product images and variants
 
-- Images `index` returns a plain array (not paginated). `store` requires
-  `image_url` (valid URL), optional `cloudinary_public_id`, `alt_text`,
-  `is_primary`, `sort_order`. The first image becomes primary automatically;
-  setting a primary demotes the others in a transaction. No file upload exists
-  — clients must send a hosted URL.
+- Images `index` returns a plain array (not paginated), ordered primary first
+  then by `sort_order`. `store` accepts either an `image` file (JPG, JPEG, PNG,
+  or WebP up to 5 MB) or a hosted `image_url`, plus optional `alt_text`,
+  `is_primary`, and `sort_order`. Uploaded files are stored on Laravel's public
+  disk; run `php artisan storage:link` so the generated `/storage` URLs resolve.
+  The first image becomes primary automatically; setting a primary demotes the
+  others in a transaction. The optional `storage_path` tracks local files for
+  cleanup when the image is replaced or removed.
 - Image `show`/`update`/`destroy` are scoped to the parent product and return
   `404` via `firstOrFail` when the image does not belong to it.
 - Variants `index` paginates 10 (newest first). `store` requires unique `sku`,
@@ -697,8 +700,9 @@ Fix only when the task calls for it, but never copy these patterns:
    not returned; availability must come from `inventories`.
 6. **Product `show` does not load images/variants**, and `store`/`update` load
    only category/brand. Clients fetch images/variants separately.
-7. **Images are URL-only** (`image_url` required, must be a valid URL). There is
-   no upload/Cloudinary integration; `cloudinary_public_id` is just metadata.
+7. **Product image uploads use the public disk.** Run `php artisan storage:link`
+   after deployment so `/storage/products/*` files can be served. Hosted
+   `image_url` values remain supported; `cloudinary_public_id` is metadata only.
 8. **Inventory has no `created_at`** and eager-loaded variants are trimmed to
    `id, product_id, name, sku`. `available_quantity`/`is_low_stock` are not
    appended to JSON.

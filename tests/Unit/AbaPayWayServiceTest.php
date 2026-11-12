@@ -2,6 +2,10 @@
 
 namespace Tests\Unit;
 
+use App\Models\Order;
+use App\Models\OrderItem;
+use App\Models\Payment;
+use App\Models\User;
 use App\Service\Payments\AbaPayWayService;
 use Carbon\Carbon;
 use Illuminate\Http\Client\Request as ClientRequest;
@@ -114,6 +118,86 @@ class AbaPayWayServiceTest extends TestCase
 
             return $request->isJson()
                 && ($fields['req_time'] ?? null) === '20261107123456'
+                && ($fields['hash'] ?? null) === $expectedHash;
+        });
+    }
+
+    public function test_qr_generation_posts_json_with_the_official_qr_field_order(): void
+    {
+        Carbon::setTestNow('2026-11-07 12:34:56 UTC');
+        config([
+            'services.aba_payway.mode' => 'sandbox',
+            'services.aba_payway.callback_url' => 'https://api.example.test/api/payments/aba/callback',
+            'services.aba_payway.qr_lifetime_minutes' => 15,
+            'services.aba_payway.qr_image_template' => 'template3_color',
+        ]);
+
+        Http::fake([
+            '*payments/generate-qr' => Http::response([
+                'status' => ['code' => '00', 'message' => 'Success!'],
+                'qrString' => '00020101021229300012',
+                'qrImage' => 'data:image/png;base64,QR',
+                'abapay_deeplink' => 'abapay://pay',
+                'amount' => 125.50,
+                'currency' => 'USD',
+            ]),
+        ]);
+
+        $user = new User(['name' => 'Jane Doe', 'email' => 'jane@example.com']);
+        $order = new Order([
+            'order_number' => 'ORD-QR-1',
+            'recipient_phone' => '012345678',
+            'currency' => 'USD',
+            'total_amount' => '125.50',
+        ]);
+        $order->id = 12;
+        $order->setRelation('user', $user);
+        $order->setRelation('items', collect([
+            new OrderItem([
+                'product_name' => 'Laptop',
+                'quantity' => 1,
+                'unit_price' => '125.50',
+            ]),
+        ]));
+
+        $payment = new Payment([
+            'order_id' => 12,
+            'provider' => 'aba_payway',
+            'provider_transaction_id' => 'ABA261107123456ABCD',
+            'payment_method' => 'aba_qr',
+            'payment_mode' => 'sandbox',
+            'amount' => '125.50',
+            'currency' => 'USD',
+            'status' => 'pending',
+        ]);
+        $payment->id = 34;
+
+        $result = app(AbaPayWayService::class)->createQrPayment($order, $payment);
+
+        $this->assertSame('00020101021229300012', $result['qr_string']);
+        $this->assertSame('data:image/png;base64,QR', $result['qr_image']);
+        $this->assertSame('abapay://pay', $result['abapay_deeplink']);
+
+        Http::assertSent(function (ClientRequest $request) {
+            $fields = $request->data();
+            $hashFields = [
+                'req_time', 'merchant_id', 'tran_id', 'amount', 'items', 'first_name',
+                'last_name', 'email', 'phone', 'purchase_type', 'payment_option',
+                'callback_url', 'return_deeplink', 'currency', 'custom_fields',
+                'return_params', 'payout', 'lifetime', 'qr_image_template',
+            ];
+            $hashString = '';
+            foreach ($hashFields as $field) {
+                $hashString .= (string) ($fields[$field] ?? '');
+            }
+            $expectedHash = base64_encode(hash_hmac('sha512', $hashString, $this->apiKey, true));
+
+            return $request->isJson()
+                && str_ends_with($request->url(), '/api/payment-gateway/v1/payments/generate-qr')
+                && ($fields['req_time'] ?? null) === '20261107123456'
+                && ($fields['payment_option'] ?? null) === 'abapay_khqr'
+                && ($fields['callback_url'] ?? null) === base64_encode('https://api.example.test/api/payments/aba/callback')
+                && ($fields['lifetime'] ?? null) === 15
                 && ($fields['hash'] ?? null) === $expectedHash;
         });
     }

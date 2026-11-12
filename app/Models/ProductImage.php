@@ -9,9 +9,10 @@ class ProductImage extends Model
 {
     use HasFactory;
 
-        protected $fillable = [
+    protected $fillable = [
         'product_id',
         'image_url',
+        'storage_path',
         'cloudinary_public_id',
         'alt_text',
         'is_primary',

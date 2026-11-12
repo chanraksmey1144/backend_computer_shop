@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -409,8 +410,15 @@ class ProductController extends Controller
     public function destroy(string $id)
     {
         $product = Product::findOrFail($id);
+        $imagePaths = $product->images()
+            ->whereNotNull('storage_path')
+            ->pluck('storage_path');
 
         $product->delete();
+
+        if ($imagePaths->isNotEmpty()) {
+            Storage::disk('public')->delete($imagePaths->all());
+        }
 
         return response()->json([
             'success' => true,

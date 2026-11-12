@@ -72,7 +72,7 @@ class AbaPayWayController extends Controller
             $payment = Payment::create([
                 'order_id' => $order->id,
                 'provider' => 'aba_payway',
-                'provider_transaction_id' => $this->newTransactionId(),
+                'provider_transaction_id' => Payment::generateAbaTransactionId(),
                 'payment_method' => 'online_checkout',
                 'amount' => $order->total_amount,
                 'currency' => $order->currency,
@@ -295,64 +295,6 @@ class AbaPayWayController extends Controller
         }
     }
 
-    public function callback(Request $request)
-    {
-        if (! $request->isJson()) {
-            return response()->json(['success' => false, 'message' => 'JSON is required.'], 415);
-        }
-
-        $payload = json_decode($request->getContent(), true);
-
-        if (! is_array($payload) || empty($payload['tran_id'])) {
-            return response()->json(['success' => false, 'message' => 'Invalid callback payload.'], 422);
-        }
-
-        try {
-            $signature = (string) $request->header('X-PayWay-Hmac-Sha512', '');
-
-            if ($signature === '' || ! $this->abaPayWay->isValidCallbackSignature($payload, $signature)) {
-                Log::warning('ABA PayWay callback signature validation failed.');
-
-                return response()->json(['success' => false, 'message' => 'Invalid callback signature.'], 401);
-            }
-        } catch (Throwable $exception) {
-            Log::error('ABA PayWay callback validation failed.', [
-                'exception' => $exception->getMessage(),
-            ]);
-
-            return response()->json(['success' => false, 'message' => 'Payment callback is unavailable.'], 503);
-        }
-
-        $payment = Payment::where('provider', 'aba_payway')
-            ->where('provider_transaction_id', (string) $payload['tran_id'])
-            ->first();
-
-        if (! $payment) {
-            Log::warning('ABA PayWay callback references an unknown transaction.');
-
-            return response()->json(['success' => true, 'message' => 'Callback received.']);
-        }
-
-        if ((string) ($payload['status'] ?? '') === '0') {
-            if (
-                ! $this->moneyMatches($payload['total_amount'] ?? null, $payment->amount)
-                || strtoupper((string) ($payload['payment_currency'] ?? '')) !== strtoupper($payment->currency)
-            ) {
-                Log::warning('ABA PayWay callback amount or currency mismatch.', [
-                    'payment_id' => $payment->id,
-                ]);
-
-                return response()->json(['success' => false, 'message' => 'Payment details could not be verified.'], 409);
-            }
-
-            $this->applyPaymentResult($payment, 'paid', $payload);
-        } else {
-            $this->applyPaymentResult($payment, 'failed', $payload);
-        }
-
-        return response()->json(['success' => true, 'message' => 'Callback received.']);
-    }
-
     public function checkoutPage(int $payment)
     {
         $paymentRecord = Payment::whereKey($payment)
@@ -492,10 +434,5 @@ class AbaPayWayController extends Controller
     private function checkoutCacheKey(int $paymentId): string
     {
         return 'aba-payway-checkout:'.$paymentId;
-    }
-
-    private function newTransactionId(): string
-    {
-        return 'ABA'.now()->format('ymdHis').strtoupper(bin2hex(random_bytes(2)));
     }
 }

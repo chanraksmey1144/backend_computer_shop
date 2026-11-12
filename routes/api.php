@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\API\AbaPayWayController;
+use App\Http\Controllers\API\AbaSimulatorController;
 use App\Http\Controllers\API\AddressController;
 use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\BrandController;
@@ -14,6 +15,7 @@ use App\Http\Controllers\API\OrderController;
 use App\Http\Controllers\API\OrderItemController;
 use App\Http\Controllers\API\OtpController;
 use App\Http\Controllers\API\PaymentController;
+use App\Http\Controllers\API\PaymentWebhookController;
 use App\Http\Controllers\API\ProductController;
 use App\Http\Controllers\API\ProductImageController;
 use App\Http\Controllers\API\ProductSerialNumberController;
@@ -21,6 +23,7 @@ use App\Http\Controllers\API\ProductVariantController;
 use App\Http\Controllers\API\RoleController;
 use App\Http\Controllers\API\UserController;
 use App\Http\Controllers\API\WarehouseController;
+use App\Http\Middleware\EnsureAbaSimulatorEnabled;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -141,8 +144,24 @@ Route::middleware('auth:sanctum')->group(function () {
     ]);
 
 });
-Route::post('/payments/aba/callback', [AbaPayWayController::class, 'callback'])
+Route::post('/payments/aba/callback', PaymentWebhookController::class)
+    ->middleware('throttle:aba-callback')
     ->name('payway.callback');
+
+Route::middleware(['auth:sanctum', 'throttle:aba-payments'])->group(function () {
+    Route::post('/payments/aba/qr', [PaymentController::class, 'createAbaQr']);
+
+    Route::get('/payments/{paymentId}/status', [PaymentController::class, 'status'])
+        ->whereNumber('paymentId');
+
+    Route::post('/payments/{paymentId}/cancel', [PaymentController::class, 'cancel'])
+        ->whereNumber('paymentId');
+});
+
+Route::middleware(['auth:sanctum', EnsureAbaSimulatorEnabled::class, 'throttle:aba-payments'])->group(function () {
+    Route::post('/dev/aba-simulator/payments/{paymentId}/simulate', [AbaSimulatorController::class, 'simulate'])
+        ->whereNumber('paymentId');
+});
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/orders/{orderId}/payments/aba', [AbaPayWayController::class, 'createPayment'])

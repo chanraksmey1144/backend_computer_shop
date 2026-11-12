@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class ProductImageController extends Controller
 {
@@ -16,7 +17,11 @@ class ProductImageController extends Controller
     {
         $productModel = Product::findOrFail($product);
 
-        $images = $productModel->images()->get();
+        $images = $productModel->images()
+            ->orderByDesc('is_primary')
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
 
         return response()->json([
             'success' => true,
@@ -33,8 +38,15 @@ class ProductImageController extends Controller
         $productModel = Product::findOrFail($product);
 
         $validated = $request->validate([
+            'image' => [
+                'required_without:image_url',
+                'image',
+                'mimes:jpg,jpeg,png,webp',
+                'max:5120',
+            ],
             'image_url' => [
-                'required',
+                'required_without:image',
+                'nullable',
                 'url',
                 'max:1000',
             ],
@@ -59,29 +71,49 @@ class ProductImageController extends Controller
                 'max:4294967295',
             ],
         ]);
-                $image = DB::transaction(function () use (
-            $productModel,
-            $validated
-        ) {
-            $isPrimary = $validated['is_primary'] ?? false;
+        $storedPath = null;
 
-            // If this is the first image, make it primary.
-            $hasImages = $productModel->images()->exists();
-
-            if (!$hasImages) {
-                $isPrimary = true;
+        if ($request->hasFile('image')) {
+            $storedPath = $request->file('image')->storePublicly('products', 'public');
+            if (!$storedPath) {
+                throw new \RuntimeException('The product image could not be stored.');
             }
 
-            // Only one image should be primary per product.
-            if ($isPrimary) {
-                $productModel->images()
-                    ->update(['is_primary' => false]);
+            $validated['image_url'] = Storage::disk('public')->url($storedPath);
+            $validated['storage_path'] = $storedPath;
+            $validated['cloudinary_public_id'] = null;
+            unset($validated['image']);
+        }
+
+        try {
+            $image = DB::transaction(function () use ($productModel, &$validated) {
+                $isPrimary = $validated['is_primary'] ?? false;
+
+                // If this is the first image, make it primary.
+                $hasImages = $productModel->images()->exists();
+
+                if (!$hasImages) {
+                    $isPrimary = true;
+                }
+
+                // Only one image should be primary per product.
+                if ($isPrimary) {
+                    $productModel->images()
+                        ->update(['is_primary' => false]);
+                }
+
+                $validated['is_primary'] = $isPrimary;
+                $validated['sort_order'] ??= (int) $productModel->images()->max('sort_order') + 1;
+
+                return $productModel->images()->create($validated);
+            });
+        } catch (\Throwable $error) {
+            if ($storedPath) {
+                Storage::disk('public')->delete($storedPath);
             }
 
-            $validated['is_primary'] = $isPrimary;
-
-            return $productModel->images()->create($validated);
-        });
+            throw $error;
+        }
 
         return response()->json([
             'success' => true,
@@ -119,9 +151,15 @@ class ProductImageController extends Controller
             ->firstOrFail();
 
         $validated = $request->validate([
+            'image' => [
+                'sometimes',
+                'image',
+                'mimes:jpg,jpeg,png,webp',
+                'max:5120',
+            ],
             'image_url' => [
                 'sometimes',
-                'required',
+                'required_without:image',
                 'url',
                 'max:1000',
             ],
@@ -141,7 +179,7 @@ class ProductImageController extends Controller
                 'sometimes',
                 'boolean',
             ],
-                        'sort_order' => [
+            'sort_order' => [
                 'sometimes',
                 'integer',
                 'min:0',
@@ -149,21 +187,51 @@ class ProductImageController extends Controller
             ],
         ]);
 
-        $updatedImage = DB::transaction(function () use (
-            $productModel,
-            $imageModel,
-            $validated
-        ) {
-            if (($validated['is_primary'] ?? false) === true) {
-                $productModel->images()
-                    ->whereKeyNot($imageModel->id)
-                    ->update(['is_primary' => false]);
+        $previousStoragePath = $imageModel->storage_path;
+        $storedPath = null;
+
+        if ($request->hasFile('image')) {
+            $storedPath = $request->file('image')->storePublicly('products', 'public');
+            if (!$storedPath) {
+                throw new \RuntimeException('The product image could not be stored.');
             }
 
-            $imageModel->update($validated);
+            $validated['image_url'] = Storage::disk('public')->url($storedPath);
+            $validated['storage_path'] = $storedPath;
+            $validated['cloudinary_public_id'] = null;
+            unset($validated['image']);
+        } elseif (array_key_exists('image_url', $validated)) {
+            $validated['storage_path'] = null;
+        }
 
-            return $imageModel->fresh();
-        });
+        try {
+            $updatedImage = DB::transaction(function () use (
+                $productModel,
+                $imageModel,
+                $validated
+            ) {
+                if (($validated['is_primary'] ?? false) === true) {
+                    $productModel->images()
+                        ->whereKeyNot($imageModel->id)
+                        ->update(['is_primary' => false]);
+                }
+
+                $imageModel->update($validated);
+
+                return $imageModel->fresh();
+            });
+        } catch (\Throwable $error) {
+            if ($storedPath) {
+                Storage::disk('public')->delete($storedPath);
+            }
+
+            throw $error;
+        }
+
+        if ($previousStoragePath && $previousStoragePath !== $updatedImage->storage_path) {
+            Storage::disk('public')->delete($previousStoragePath);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Product image updated successfully.',
@@ -182,7 +250,25 @@ class ProductImageController extends Controller
             ->whereKey($image)
             ->firstOrFail();
 
-        $imageModel->delete();
+        $wasPrimary = $imageModel->is_primary;
+        $storagePath = $imageModel->storage_path;
+
+        DB::transaction(function () use ($productModel, $imageModel, $wasPrimary) {
+            $imageModel->delete();
+
+            if ($wasPrimary) {
+                $nextPrimary = $productModel->images()
+                    ->orderBy('sort_order')
+                    ->orderBy('id')
+                    ->first();
+
+                $nextPrimary?->update(['is_primary' => true]);
+            }
+        });
+
+        if ($storagePath) {
+            Storage::disk('public')->delete($storagePath);
+        }
 
         return response()->json([
             'success' => true,
